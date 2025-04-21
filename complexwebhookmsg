@@ -1,0 +1,90 @@
+local H, P, U = game:GetService("HttpService"), game:GetService("Players"), {}
+
+local W = "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+
+local function I(v)
+	return "\"" .. tostring(v):gsub("\\", "\\\\"):gsub("\"", "\\\""):gsub("\n", "\\n") .. "\""
+end
+
+local function E(t)
+	if typeof(t) == "table" then
+		local isArray = #t > 0
+		local r = {}
+		if isArray then
+			for _, v in ipairs(t) do
+				table.insert(r, E(v))
+			end
+			return "[" .. table.concat(r, ",") .. "]"
+		else
+			for k, v in pairs(t) do
+				table.insert(r, I(k) .. ":" .. E(v))
+			end
+			return "{" .. table.concat(r, ",") .. "}"
+		end
+	elseif typeof(t) == "string" then
+		return I(t)
+	elseif typeof(t) == "boolean" then
+		return tostring(t)
+	elseif typeof(t) == "number" then
+		return tostring(t)
+	end
+	return "\"<nil>\""
+end
+
+local PayloadMeta = {}
+PayloadMeta.__index = PayloadMeta
+function PayloadMeta:new()
+	return setmetatable({d = {}}, self)
+end
+function PayloadMeta:set(k, v)
+	self.d[k] = v
+	return self
+end
+function PayloadMeta:encode()
+	return E(self.d)
+end
+
+local function Generator(tbl)
+	local mt = {}
+	function mt:__call()
+		return setmetatable({i = 0, d = tbl}, {
+			__index = function(_, k)
+				if k == "next" then
+					return function()
+						self.i = self.i + 1
+						return tbl[self.i]
+					end
+				end
+			end
+		})
+	end
+	return setmetatable({}, mt)()
+end
+
+local function MessageLayer(msg)
+	local layers = {msg, "User:", P.LocalPlayer.Name, "Time:", os.date("%X")}
+	local gen = Generator(layers)
+	local result = {}
+	for i = 1, #layers do
+		table.insert(result, gen.next())
+	end
+	return table.concat(result, " | ")
+end
+
+local function Transmit(data)
+	local p = H:PostAsync(W, data, Enum.HttpContentType.ApplicationJson)
+end
+
+local function Start()
+	local msg = "EDIT THIS MESSAGE" -- <==== This is the ONLY place to edit message
+	local finalMessage = MessageLayer(msg)
+
+	local payload = PayloadMeta:new()
+		:set("username", P.LocalPlayer.Name)
+		:set("content", finalMessage)
+		:encode()
+
+	Transmit(payload)
+end
+
+Start()
